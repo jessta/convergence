@@ -1,42 +1,28 @@
 package convergence
 /*
 tls implementation that verifies certs using the convergence notary system
-
-convergence
-
-make connection, get cert and check the cert against notaries.
-
 */
 import (
-	//"url"
-
-
 	"crypto/tls"
 	"crypto/x509"
 	"crypto/rsa"
 	"crypto/rand"
-
-
 	"encoding/base64"
 	"encoding/hex"
 	"path"
 	"log"
-
 	"http"
-
 	"strings"
 	"json"
 	"bytes"
 	"fmt"
-
-
-
 	"net"
 	"crypto"
 	"time"
 	"os"
-
 )
+
+type BasicVerifier struct{}
 
 type Verifier interface {
 	Check(address string, fingerprint string)(fp string, err os.Error)
@@ -54,7 +40,7 @@ type Notary struct {
 
 type Server struct {
 	key *rsa.PrivateKey
-	verifier Verifier	
+	Verifier	
 }
 
 type Client struct {
@@ -64,6 +50,7 @@ type Client struct {
 
 func (c *Client) AddNotary(address string, cert *x509.Certificate){
 	c.notaries = append(c.notaries, NewNotary(address,cert))
+	fmt.Println(c.notaries[len(c.notaries)-1])
 }
 
 func (c *Client) Dial(netstring, address string) (net.Conn, os.Error) {
@@ -123,7 +110,7 @@ func (c *Client) Dial(netstring, address string) (net.Conn, os.Error) {
 
 
 func NewServer(privateKey *rsa.PrivateKey) *Server{
-	return &Server{privateKey, nil}
+	return &Server{privateKey, BasicVerifier{}}
 }
 
 func NewNotary(address string, cert *x509.Certificate) *Notary{
@@ -143,6 +130,7 @@ type NotaryError struct {
 }
 
 type NotaryResponse struct {
+	notary *Notary
 	privateKey *rsa.PrivateKey
 	FingerprintList []fingerprint `json:"fingerprintList"`
 	Signature       string        `json:"signature"`
@@ -159,7 +147,22 @@ type timestamp struct {
 }
 
 func (r NotaryResponse) VerifySig()(valid bool){
-	return true
+	fpList, err := json.Marshal(r.FingerprintList)
+	if err != nil {
+		return false
+	}
+	hash := crypto.Hash(crypto.SHA1).New()
+	hash.Write(fpList)
+	hashed := hash.Sum()
+	sig,err := base64.StdEncoding. DecodeString(r.Signature)
+	if err != nil {
+		return false
+	}
+	err = rsa.VerifyPKCS1v15(r.notary.cert.PublicKey.(*rsa.PublicKey), crypto.SHA1, hashed , sig ) 
+	if err == nil {
+		return true
+	}
+	return false
 }
 
 func (r NotaryResponse) MarshalJSON() ([]byte, os.Error) {
@@ -227,13 +230,6 @@ func fetchCert(address string) (*Cert, os.Error) {
 }
 
 func (n *Notary) Check(address string, fingerprint string) (NotaryResponse, bool, os.Error){
-	/*
-		connect to notary 
-		check notary cert
-		send a request
-		check fingerprint in response matches fingerprint.
-		 
-	*/
 	addr, err := net.ResolveTCPAddr("tcp", n.address)
 	if err != nil {
 		return NotaryResponse{},false, err
@@ -242,6 +238,9 @@ func (n *Notary) Check(address string, fingerprint string) (NotaryResponse, bool
 	if err != nil {
 		return NotaryResponse{},false, err
 	}
+	defer netCon.Close()
+
+
 	a:= strings.Split(address,":")
 	host,port := a[0],a[1]
 	config := &tls.Config{nil,nil,nil,nil,[]string{"http"},host,false,nil}
@@ -262,6 +261,7 @@ func (n *Notary) Check(address string, fingerprint string) (NotaryResponse, bool
 	}	
 	request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	response, err := httpClient.Do(request)
+	defer response.Body.Close()
 	if err != nil {
 		return NotaryResponse{},false,err
 	}
@@ -271,9 +271,17 @@ func (n *Notary) Check(address string, fingerprint string) (NotaryResponse, bool
 	}
 	nResponse := NotaryResponse{}
 	err = json.NewDecoder(response.Body).Decode(&nResponse)
+
 	if err != nil {
 		return NotaryResponse{},false,err
 	}
+
+	nResponse.notary = n
+
+	if !nResponse.VerifySig(){
+		 return NotaryResponse{},false,err
+	}
+	
 	for i := range nResponse.FingerprintList {
 		if nResponse.FingerprintList[i].Fingerprint == fingerprint {
 			return nResponse,true, nil
@@ -282,7 +290,7 @@ func (n *Notary) Check(address string, fingerprint string) (NotaryResponse, bool
 	return nResponse,false, os.NewError("fingerprint didn't match")
 }
 
-func (s *Server) Check(address string, fingerprint string)(fp string, err os.Error){
+func (BasicVerifier) Check(address string, fingerprint string)(fp string, err os.Error){
 	cert,err := fetchCert(address)
 	if err != nil {
 		return "",err
