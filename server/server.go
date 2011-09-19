@@ -15,9 +15,11 @@ func main() {
 	var keyFile  string
 	var certFile string
 	var addr string
+	var proxyAddr string
 	flag.StringVar(&keyFile, "keyfile", "./key.pem","file name of key file")
 	flag.StringVar(&certFile, "certfile", "./cert.pem","file name of cert file")
 	flag.StringVar(&addr, "addr", "0.0.0.0:443","address to listen on")
+	flag.StringVar(&proxyAddr, "proxyAddr", "0.0.0.0:80","address for proxy to listen on")
 
 	flag.Parse()
 
@@ -41,7 +43,10 @@ func main() {
 
 	http.Handle("/target/", s)
 
-	log.Println("listening.....")
+	log.Println("Proxy listening...")
+	go convergence.ProxyListenAndServe(proxyAddr)
+
+	log.Println("listening.....")	
 	err = http.ListenAndServeTLS(addr, certFile, keyFile, nil)
 	if err != nil {
 		log.Fatalln("error listening: ",err)

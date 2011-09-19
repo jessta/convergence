@@ -22,20 +22,18 @@ import (
 	"os"
 )
 
-type BasicVerifier struct{}
-
 type Verifier interface {
 	Check(address string, fingerprint string)(fp string, err os.Error)
 }
 
-type Cert struct {
-	cert *x509.Certificate
+type cert struct {
+	certificate *x509.Certificate
 	fingerprint []byte
 }
 
 type Notary struct {
 	address string
-	Cert
+	cert
 }
 
 type Server struct {
@@ -113,10 +111,10 @@ func NewServer(privateKey *rsa.PrivateKey) *Server{
 	return &Server{privateKey, BasicVerifier{}}
 }
 
-func NewNotary(address string, cert *x509.Certificate) *Notary{
+func NewNotary(address string, certificate *x509.Certificate) *Notary{
 	sha := crypto.Hash(crypto.SHA1).New()
-	sha.Write(cert.Raw)
-	return &Notary{address,Cert{cert,sha.Sum()}}
+	sha.Write(certificate.Raw)
+	return &Notary{address,cert{certificate,sha.Sum()}}
 }
 
 type NotaryRequest struct {
@@ -158,7 +156,7 @@ func (r NotaryResponse) VerifySig()(valid bool){
 	if err != nil {
 		return false
 	}
-	err = rsa.VerifyPKCS1v15(r.notary.cert.PublicKey.(*rsa.PublicKey), crypto.SHA1, hashed , sig ) 
+	err = rsa.VerifyPKCS1v15(r.notary.certificate.PublicKey.(*rsa.PublicKey), crypto.SHA1, hashed , sig ) 
 	if err == nil {
 		return true
 	}
@@ -194,40 +192,7 @@ func (r NotaryResponse) signResponse(response []byte) ([]byte, os.Error) {
 	return rsa.SignPKCS1v15(rand.Reader, r.privateKey, crypto.SHA1, hashed)
 }
 
-func fetchCert(address string) (*Cert, os.Error) {
-	//fetch cert over network
-	addr, err := net.ResolveTCPAddr("tcp", address)
-	if err != nil {
-		return nil, err
-	}
-	netCon, err := net.DialTCP("tcp", nil, addr)
-	if err != nil {
-		return nil, err
-	}
-	host := strings.Split(address,":")[0]
 
-	config := &tls.Config{nil,nil,nil,nil,[]string{"http"},host,false,nil}
-
-	client := tls.Client(netCon, config)
-	err = client.Handshake()
-	if err != nil {
-		return nil, err
-	}
-	state := client.ConnectionState()
-	if len(state.PeerCertificates) == 0 {
-		return nil, os.NewError("no cert recieved from host")
-	}
-	certRaw := state.PeerCertificates[0].Raw
-
-	sha := crypto.Hash(crypto.SHA1).New()
-	sha.Write(certRaw)
-
-	client.Close()
-	netCon.Close()
-
-	c := &Cert{state.PeerCertificates[0], sha.Sum()}
-	return c, nil
-}
 
 func (n *Notary) Check(address string, fingerprint string) (NotaryResponse, bool, os.Error){
 	addr, err := net.ResolveTCPAddr("tcp", n.address)
@@ -243,14 +208,18 @@ func (n *Notary) Check(address string, fingerprint string) (NotaryResponse, bool
 
 	a:= strings.Split(address,":")
 	host,port := a[0],a[1]
-	config := &tls.Config{nil,nil,nil,nil,[]string{"http"},host,false,nil}
 
-	client := tls.Client(netCon, config)
-	err = client.Handshake()
-	if err != nil {
-		return NotaryResponse{},false, err
-	}
-	httpClient := http.NewClientConn(client, nil)
+
+		config := &tls.Config{nil,nil,nil,nil,[]string{"http"},host,false,nil}
+
+		client := tls.Client(netCon, config)
+		err = client.Handshake()
+		if err != nil {
+			return NotaryResponse{},false, err
+		}
+		httpClient := http.NewClientConn(client, nil)
+
+
 	url := fmt.Sprintf("http://%s/target/%s+%s",n.address,host,port)
 	post := fmt.Sprintf("fingerprint=%s",fingerprint)
 	//log.Println(post)
@@ -261,15 +230,19 @@ func (n *Notary) Check(address string, fingerprint string) (NotaryResponse, bool
 	}	
 	request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	response, err := httpClient.Do(request)
-	defer response.Body.Close()
+	
 	if err != nil {
 		return NotaryResponse{},false,err
 	}
+	
 	if  response.StatusCode != http.StatusOK {
 		//log.Println(response.Status)
 		return NotaryResponse{},false,err
 	}
+
+	defer response.Body.Close()
 	nResponse := NotaryResponse{}
+
 	err = json.NewDecoder(response.Body).Decode(&nResponse)
 
 	if err != nil {
@@ -288,22 +261,6 @@ func (n *Notary) Check(address string, fingerprint string) (NotaryResponse, bool
 		}
 	}
 	return nResponse,false, os.NewError("fingerprint didn't match")
-}
-
-func (BasicVerifier) Check(address string, fingerprint string)(fp string, err os.Error){
-	cert,err := fetchCert(address)
-	if err != nil {
-		return "",err
-	}
-	
-	myFP := hex.EncodeToString(cert.fingerprint)
-	myFP = fingerPrintStr(myFP).String()
-	return myFP,nil
-
-}
-
-func Get(Url string) (r *http.Response, err os.Error) {
-	return nil,nil
 }
 
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request){
