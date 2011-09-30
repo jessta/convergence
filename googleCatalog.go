@@ -7,24 +7,26 @@ import (
 	"os"
 	"strings"
 )
+
 const GOOGLE_CATALOG = "certs.googlednstest.com"
 
-type GoogleCatalogVerifier struct {}
+type GoogleCatalogVerifier struct{}
 
-func (GoogleCatalogVerifier)Check(address string, fingerprint string) (fp string, err os.Error){
-		fp = strings.ToLower(fingerprint)
-	
-		txts, err := net.LookupTXT(fp+"."+GOOGLE_CATALOG)
-		if err != nil {
-			return "",err
-		}
+func (GoogleCatalogVerifier) Check(address string, fingerprint string) (fp string, err os.Error) {
+	fp = strings.ToLower(fingerprint)
 
-		//ok, google has seen this one. But 
-		/*t := time.UTC().Seconds()
-		currentDay := t/int64(60*60*24)*/
-		if len(txts) > 0 {
-			return fingerprint, nil
-		}
+	txts, err := net.LookupTXT(fp + "." + GOOGLE_CATALOG)
+	if err != nil {
+		return "", err
+	}
 
-		return "",os.NewError("google catalog didn't contain ")
+	//ok, google has seen this one. But 
+	/*t := time.UTC().Seconds()
+	currentDay := t/int64(60*60*24)*/
+	if len(txts) > 0 {
+		return fingerprint, nil
+	}
+
+	return "", os.NewError("google catalog didn't contain ")
 }
+

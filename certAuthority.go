@@ -5,8 +5,10 @@ package convergence
 import (
 	"os"
 )
-type CertAuthVerifier struct {}
 
-func (CertAuthVerifier) Check(address string, fingerprint string)(fp string, err os.Error){
-	return "",nil
+type CertAuthVerifier struct{}
+
+func (CertAuthVerifier) Check(address string, fingerprint string) (fp string, err os.Error) {
+	return "", nil
 }
+

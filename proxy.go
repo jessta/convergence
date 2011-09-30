@@ -77,7 +77,7 @@ Listen for connect requests on address, only forward connections to same port
 func ProxyListenAndServe(laddr string) os.Error {
 	netlisten, err := net.Listen("tcp", laddr)
 	if netlisten == nil {
-		return err 
+		return err
 	}
 	defer netlisten.Close()
 
@@ -87,7 +87,7 @@ func ProxyListenAndServe(laddr string) os.Error {
 		if conn != nil {
 			go newconn(conn)
 		} else {
-			return err 
+			return err
 		}
 	}
 	return nil

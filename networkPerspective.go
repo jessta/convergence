@@ -13,15 +13,15 @@ import (
 
 type BasicVerifier struct{}
 
-func (BasicVerifier) Check(address string, fingerprint string)(fp string, err os.Error){
-	cert,err := fetchCert(address)
+func (BasicVerifier) Check(address string, fingerprint string) (fp string, err os.Error) {
+	cert, err := fetchCert(address)
 	if err != nil {
-		return "",err
+		return "", err
 	}
-	
+
 	myFP := hex.EncodeToString(cert.fingerprint)
 	myFP = fingerPrintStr(myFP).String()
-	return myFP,nil
+	return myFP, nil
 
 }
 
@@ -35,9 +35,9 @@ func fetchCert(address string) (*cert, os.Error) {
 	if err != nil {
 		return nil, err
 	}
-	host := strings.Split(address,":")[0]
+	host := strings.Split(address, ":")[0]
 
-	config := &tls.Config{nil,nil,nil,nil,[]string{"http"},host,false,nil}
+	config := &tls.Config{nil, nil, nil, nil, []string{"http"}, host, false, nil}
 
 	client := tls.Client(netCon, config)
 	err = client.Handshake()
@@ -59,3 +59,4 @@ func fetchCert(address string) (*cert, os.Error) {
 	c := &cert{state.PeerCertificates[0], sha.Sum()}
 	return c, nil
 }
+
