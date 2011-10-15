@@ -106,8 +106,12 @@ func (c *Client) Dial(netstring, address string) (net.Conn, os.Error) {
 	return netCon, nil
 }
 
-func NewServer(privateKey *rsa.PrivateKey) *Server {
-	return &Server{privateKey, BasicVerifier{}}
+func NewServer(privateKey *rsa.PrivateKey,verifier Verifier) *Server {
+	if verifier == nil {
+		return &Server{privateKey, BasicVerifier{}}
+	}
+
+	return &Server{privateKey,verifier}
 }
 
 func NewNotary(address string, certificate *x509.Certificate) *Notary {

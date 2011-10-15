@@ -41,7 +41,7 @@ func main() {
 		log.Fatalln("invalid key file: ", err)
 	}
 
-	s := convergence.NewServer(privateKey)
+	s := convergence.NewServer(privateKey,nil)
 
 	http.Handle("/target/", s)
 

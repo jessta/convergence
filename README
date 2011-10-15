@@ -3,4 +3,5 @@ An implementation of Convergence(https://github.com/moxie0/Convergence) in Go.
 To run a basic notary that uses a network perspective 
 goinstall github.com/jessta/convergence/server
 
+Should build with weekly.2011-10-06
 
