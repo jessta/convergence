@@ -3,16 +3,17 @@ package convergence
 	Package to verify a cert using google's cert catalog
 */
 import (
+	"errors"
 	"net"
-	"os"
 	"strings"
+	//	"time"
 )
 
 const GOOGLE_CATALOG = "certs.googlednstest.com"
 
 type GoogleCatalogVerifier struct{}
 
-func (GoogleCatalogVerifier) Check(address string, fingerprint string) (fp string, err os.Error) {
+func (GoogleCatalogVerifier) Check(address string, fingerprint string) (fp string, err error) {
 	fp = strings.ToLower(fingerprint)
 
 	txts, err := net.LookupTXT(fp + "." + GOOGLE_CATALOG)
@@ -20,13 +21,14 @@ func (GoogleCatalogVerifier) Check(address string, fingerprint string) (fp strin
 		return "", err
 	}
 
-	//ok, google has seen this one. But 
-	/*t := time.UTC().Seconds()
-	currentDay := t/int64(60*60*24)*/
 	if len(txts) > 0 {
 		return fingerprint, nil
 	}
 
-	return "", os.NewError("google catalog didn't contain ")
-}
+	//ok, google has seen this one. But how long ago?*/
 
+	//t := time.Now().UTC().Unix()
+	//currentDay := t / int64(60*60*24)
+
+	return "", errors.New("google catalog didn't contain ")
+}

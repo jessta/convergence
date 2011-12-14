@@ -1,12 +1,12 @@
 package convergence
 
 import (
-	"net"
-	"io"
-	"os"
-	"regexp"
 	"bufio"
+	"io"
+
 	"log"
+	"net"
+	"regexp"
 )
 
 func copy(a io.ReadWriteCloser, b io.ReadWriteCloser) {
@@ -74,7 +74,7 @@ func newconn(c net.Conn) {
 /*
 Listen for connect requests on address, only forward connections to same port
 */
-func ProxyListenAndServe(laddr string) os.Error {
+func ProxyListenAndServe(laddr string) error {
 	netlisten, err := net.Listen("tcp", laddr)
 	if netlisten == nil {
 		return err

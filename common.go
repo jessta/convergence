@@ -3,27 +3,41 @@ package convergence
 tls implementation that verifies certs using the convergence notary system
 */
 import (
+	"bytes"
+	"crypto"
+	"crypto/rand"
+	"crypto/rsa"
 	"crypto/tls"
 	"crypto/x509"
-	"crypto/rsa"
-	"crypto/rand"
 	"encoding/base64"
 	"encoding/hex"
-	"path"
-	"log"
-	"http"
-	"strings"
-	"json"
-	"bytes"
+	"encoding/json"
+	"errors"
 	"fmt"
+	"log"
 	"net"
-	"crypto"
+	"net/http"
+	"net/http/httputil"
+	"path"
+	"strings"
 	"time"
-	"os"
 )
 
 type Verifier interface {
-	Check(address string, fingerprint string) (fp string, err os.Error)
+	Check(address string, fingerprint string) (fp string, err error)
+}
+
+type Store interface {
+	Get(key string) (interface{}, error)
+	Put(key string, val interface{}) error
+	Close() error
+}
+
+type SeenCert struct {
+	host        string
+	fingerprint string
+	lastSeen    time.Time
+	firstSeen   time.Time
 }
 
 type cert struct {
@@ -51,7 +65,7 @@ func (c *Client) AddNotary(address string, cert *x509.Certificate) {
 	fmt.Println(c.notaries[len(c.notaries)-1])
 }
 
-func (c *Client) Dial(netstring, address string) (net.Conn, os.Error) {
+func (c *Client) Dial(netstring, address string) (net.Conn, error) {
 	//connect to address using tls
 	//check cert against notaries
 	//
@@ -67,7 +81,7 @@ func (c *Client) Dial(netstring, address string) (net.Conn, os.Error) {
 	host := strings.Split(address, ":")[0]
 	log.Println(host)
 
-	config := &tls.Config{nil, nil, nil, nil, []string{"http"}, host, false, nil}
+	config := &tls.Config{nil, nil, nil, nil, nil, []string{"http"}, host, false, true, nil}
 
 	client := tls.Client(netCon, config)
 	err = client.Handshake()
@@ -76,13 +90,13 @@ func (c *Client) Dial(netstring, address string) (net.Conn, os.Error) {
 	}
 	state := client.ConnectionState()
 	if len(state.PeerCertificates) == 0 {
-		return nil, os.NewError("no cert recieved from host")
+		return nil, errors.New("no cert recieved from host")
 	}
 	certRaw := state.PeerCertificates[0].Raw
 
 	sha := crypto.Hash(crypto.SHA1).New()
 	sha.Write(certRaw)
-	sum := sha.Sum()
+	sum := sha.Sum(nil)
 	FP := hex.EncodeToString(sum)
 	FP = fingerPrintStr(FP).String()
 	agree := 0
@@ -101,23 +115,23 @@ func (c *Client) Dial(netstring, address string) (net.Conn, os.Error) {
 	}
 	if agree < c.Threshold {
 		netCon.Close()
-		return nil, os.NewError(fmt.Sprintf("only %d out of %d notaries agreed on certificate (needs %d)", agree, len(c.notaries), c.Threshold))
+		return nil, errors.New(fmt.Sprintf("only %d out of %d notaries agreed on certificate (needs %d)", agree, len(c.notaries), c.Threshold))
 	}
 	return netCon, nil
 }
 
-func NewServer(privateKey *rsa.PrivateKey,verifier Verifier) *Server {
+func NewServer(privateKey *rsa.PrivateKey, verifier Verifier) *Server {
 	if verifier == nil {
 		return &Server{privateKey, BasicVerifier{}}
 	}
 
-	return &Server{privateKey,verifier}
+	return &Server{privateKey, verifier}
 }
 
 func NewNotary(address string, certificate *x509.Certificate) *Notary {
 	sha := crypto.Hash(crypto.SHA1).New()
 	sha.Write(certificate.Raw)
-	return &Notary{address, cert{certificate, sha.Sum()}}
+	return &Notary{address, cert{certificate, sha.Sum(nil)}}
 }
 
 type NotaryRequest struct {
@@ -127,7 +141,7 @@ type NotaryRequest struct {
 
 type NotaryError struct {
 	notary Notary
-	err    os.Error
+	err    error
 }
 
 type NotaryResponse struct {
@@ -143,8 +157,8 @@ type fingerprint struct {
 }
 
 type timestamp struct {
-	Start  int64 `json:"start"`
-	Finish int64 `json:"finish"`
+	Start  time.Time `json:"start"`
+	Finish time.Time `json:"finish"`
 }
 
 func (r NotaryResponse) VerifySig() (valid bool) {
@@ -154,7 +168,7 @@ func (r NotaryResponse) VerifySig() (valid bool) {
 	}
 	hash := crypto.Hash(crypto.SHA1).New()
 	hash.Write(fpList)
-	hashed := hash.Sum()
+	hashed := hash.Sum(nil)
 	sig, err := base64.StdEncoding.DecodeString(r.Signature)
 	if err != nil {
 		return false
@@ -166,7 +180,7 @@ func (r NotaryResponse) VerifySig() (valid bool) {
 	return false
 }
 
-func (r NotaryResponse) MarshalJSON() ([]byte, os.Error) {
+func (r NotaryResponse) MarshalJSON() ([]byte, error) {
 
 	buf := new(bytes.Buffer)
 	buf.Write([]byte(`{"fingerprintList":`))
@@ -187,15 +201,15 @@ func (r NotaryResponse) MarshalJSON() ([]byte, os.Error) {
 	return buf.Bytes(), nil
 }
 
-func (r NotaryResponse) signResponse(response []byte) ([]byte, os.Error) {
+func (r NotaryResponse) signResponse(response []byte) ([]byte, error) {
 	hash := crypto.Hash(crypto.SHA1).New()
 	hash.Write(response)
-	hashed := hash.Sum()
+	hashed := hash.Sum(nil)
 
 	return rsa.SignPKCS1v15(rand.Reader, r.privateKey, crypto.SHA1, hashed)
 }
 
-func (n *Notary) Check(address string, fingerprint string) (NotaryResponse, bool, os.Error) {
+func (n *Notary) Check(address string, fingerprint string) (NotaryResponse, bool, error) {
 	addr, err := net.ResolveTCPAddr("tcp", n.address)
 	if err != nil {
 		return NotaryResponse{}, false, err
@@ -209,14 +223,14 @@ func (n *Notary) Check(address string, fingerprint string) (NotaryResponse, bool
 	a := strings.Split(address, ":")
 	host, port := a[0], a[1]
 
-	config := &tls.Config{nil, nil, nil, nil, []string{"http"}, host, false, nil}
+	config := &tls.Config{nil, nil, nil, nil, nil, []string{"http"}, host, false, true, nil}
 
 	client := tls.Client(netCon, config)
 	err = client.Handshake()
 	if err != nil {
 		return NotaryResponse{}, false, err
 	}
-	httpClient := http.NewClientConn(client, nil)
+	httpClient := httputil.NewClientConn(client, nil)
 
 	url := fmt.Sprintf("http://%s/target/%s+%s", n.address, host, port)
 	post := fmt.Sprintf("fingerprint=%s", fingerprint)
@@ -258,12 +272,12 @@ func (n *Notary) Check(address string, fingerprint string) (NotaryResponse, bool
 			return nResponse, true, nil
 		}
 	}
-	return nResponse, false, os.NewError("fingerprint didn't match")
+	return nResponse, false, errors.New("fingerprint didn't match")
 }
 
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	///target/github.com+443?fingerprint=CE6799252CAC78127D94B5622C31C516A6347353
-	log.Println("handling connection", r.RawURL)
+	log.Println("handling connection", r.URL)
 	log.Println(r.URL.Path)
 	url := path.Clean(r.URL.Path)
 	target := url[strings.LastIndex(url, "/")+1:]
@@ -316,8 +330,8 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		privateKey: s.key,
 		FingerprintList: []fingerprint{
 			fingerprint{Timestamp: timestamp{
-				time.Seconds() - 1,
-				time.Seconds(),
+				time.Now(),
+				time.Now(),
 			},
 				Fingerprint: myFP}}}
 	response, err := json.Marshal(d)

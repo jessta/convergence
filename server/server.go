@@ -1,18 +1,17 @@
 package main
 
 import (
-	"os"
+	"crypto/x509"
+	"encoding/pem"
 	"flag"
-	"log"
 	"github.com/jessta/convergence"
 	"io/ioutil"
-	"crypto/x509"
-	"http"
-	"encoding/pem"
+	"log"
+	"net/http"
 )
 
 func main() {
-	var err os.Error
+	var err error
 
 	var keyFile string
 	var certFile string
@@ -41,7 +40,7 @@ func main() {
 		log.Fatalln("invalid key file: ", err)
 	}
 
-	s := convergence.NewServer(privateKey,nil)
+	s := convergence.NewServer(privateKey, nil)
 
 	http.Handle("/target/", s)
 
