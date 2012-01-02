@@ -27,17 +27,11 @@ type Verifier interface {
 	Check(address string, fingerprint string) (fp string, err error)
 }
 
-type Store interface {
-	Get(key string) (interface{}, error)
-	Put(key string, val interface{}) error
-	Close() error
-}
-
 type SeenCert struct {
-	host        string
-	fingerprint string
-	lastSeen    time.Time
-	firstSeen   time.Time
+	Host        string
+	Fingerprint string
+	LastSeen    time.Time
+	FirstSeen   time.Time
 }
 
 type cert struct {
@@ -121,10 +115,6 @@ func (c *Client) Dial(netstring, address string) (net.Conn, error) {
 }
 
 func NewServer(privateKey *rsa.PrivateKey, verifier Verifier) *Server {
-	if verifier == nil {
-		return &Server{privateKey, BasicVerifier{}}
-	}
-
 	return &Server{privateKey, verifier}
 }
 
@@ -349,7 +339,7 @@ type fingerPrintStr string
 
 func (f fingerPrintStr) String() string {
 	str := strings.ToUpper(string(f))
-	buf := make([]int, 0, len(str))
+	buf := make([]rune, 0, len(str))
 	colon := false
 	for i, r := range str {
 		buf = append(buf, r)

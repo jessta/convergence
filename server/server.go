@@ -39,9 +39,9 @@ func main() {
 	if err != nil {
 		log.Fatalln("invalid key file: ", err)
 	}
-
-	s := convergence.NewServer(privateKey, nil)
-
+	store := convergence.NewStore()
+	defer store.Close()
+	s := convergence.NewServer(privateKey, convergence.BasicVerifier{store})
 	http.Handle("/target/", s)
 
 	log.Println("Proxy listening...")

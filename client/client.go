@@ -53,7 +53,7 @@ func main() {
 		conn.Close()
 	}
 	if err != nil {
-		log.Fatalln("trouble dialing: ", err.String())
+		log.Fatalln("trouble dialing: ", err.Error())
 	}
 
 }

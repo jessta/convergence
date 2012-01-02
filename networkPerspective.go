@@ -1,38 +1,33 @@
 package convergence
+/* Package to verify a cert using a different network perspective */
 
 import (
 	"crypto"
-
 	"crypto/tls"
 	"encoding/hex"
-	"errors" /*
-		Package to verify a cert using a different network perspective
-	*/"log"
+	"errors"
+	"log"
 	"net"
 	"strings"
 	"time"
 )
 
 type BasicVerifier struct {
-	store Store
-}
-
-func (b BasicVerifier) NewBasicVerifier(store Store) Verifier {
-	return BasicVerifier{store: store}
+	Store Store
 }
 
 func (b BasicVerifier) Check(address string, fingerprint string) (fp string, err error) {
-	storedprint, err := b.store.Get(address)
+	storedprint, err := b.Store.Get([]byte(address))
 	if err == nil {
 		seen, ok := storedprint.(SeenCert)
 		if ok {
-			if seen.fingerprint == fingerprint {
-				seen.lastSeen = time.Now()
-				err = b.store.Put(address, seen)
+			if seen.Fingerprint == fingerprint {
+				seen.LastSeen = time.Now()
+				err = b.Store.Set([]byte(address), seen)
 				if err != nil {
 					log.Println("couldn't update seenCert for host:" + address + ":" + err.Error())
 				}
-				return seen.fingerprint, nil
+				return seen.Fingerprint, nil
 			}
 		} else {
 			log.Println("value in store wasn't a seenCert for key: " + address)
@@ -47,7 +42,7 @@ func (b BasicVerifier) Check(address string, fingerprint string) (fp string, err
 	myFP := hex.EncodeToString(cert.fingerprint)
 	myFP = fingerPrintStr(myFP).String()
 	seenTime := time.Now()
-	err = b.store.Put(address, SeenCert{host: address, fingerprint: myFP, firstSeen: seenTime, lastSeen: seenTime})
+	err = b.Store.Set([]byte(address), SeenCert{Host: address, Fingerprint: myFP, FirstSeen: seenTime, LastSeen: seenTime})
 	if err != nil {
 		log.Println("couldn't store seenCert for host:" + address + ":" + err.Error())
 	}
