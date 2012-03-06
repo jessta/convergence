@@ -75,7 +75,14 @@ func (c *Client) Dial(netstring, address string) (net.Conn, error) {
 	host := strings.Split(address, ":")[0]
 	log.Println(host)
 
-	config := &tls.Config{nil, nil, nil, nil, nil, []string{"http"}, host, false, true, nil}
+	config := &tls.Config{Rand: nil, Time: nil, Certificates: nil, NameToCertificate: nil, 
+	                      RootCAs: nil, 
+	                      NextProtos:[]string{"http"}, 
+	                      ServerName: host, 
+	                      ClientAuth: tls.NoClientCert, 
+	                      ClientCAs: nil,
+	                      InsecureSkipVerify:true,
+	                      CipherSuites: nil}
 
 	client := tls.Client(netCon, config)
 	err = client.Handshake()
@@ -212,8 +219,14 @@ func (n *Notary) Check(address string, fingerprint string) (NotaryResponse, bool
 
 	a := strings.Split(address, ":")
 	host, port := a[0], a[1]
-
-	config := &tls.Config{nil, nil, nil, nil, nil, []string{"http"}, host, false, true, nil}
+	config := &tls.Config{Rand: nil, Time: nil, Certificates: nil, NameToCertificate: nil, 
+	                      RootCAs: nil, 
+	                      NextProtos:[]string{"http"}, 
+	                      ServerName: host, 
+	                      ClientAuth: tls.NoClientCert, 
+	                      ClientCAs: nil,
+	                      InsecureSkipVerify:true,
+	                      CipherSuites: nil}
 
 	client := tls.Client(netCon, config)
 	err = client.Handshake()
@@ -314,7 +327,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusConflict)
 	}
 
-	log.Println(host, ":", port, ":", theirFP)
+	log.Println(host, ":", port, ":", theirFP,myFP)
 
 	d := NotaryResponse{
 		privateKey: s.key,

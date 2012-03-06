@@ -64,17 +64,11 @@ func fetchCert(address string) (*cert, error) {
 	host := strings.Split(address, ":")[0]
 
 	config := &tls.Config{
-		Rand:               nil,
-		Time:               nil,
-		Certificates:       nil,
-		NameToCertificate:  nil,
-		RootCAs:            nil,
 		NextProtos:         []string{"http"},
 		ServerName:         host,
-		AuthenticateClient: false,
 		InsecureSkipVerify: true,
-		CipherSuites:       nil,
 	}
+	log.Println("getting cert for: ", host)
 	client := tls.Client(netCon, config)
 	err = client.Handshake()
 	if err != nil {
@@ -83,6 +77,18 @@ func fetchCert(address string) (*cert, error) {
 	state := client.ConnectionState()
 	if len(state.PeerCertificates) == 0 {
 		return nil, errors.New("no cert recieved from host")
+	}
+	for i := range state.PeerCertificates {
+
+		log.Println(state.PeerCertificates[i].Subject)
+		certRaw := state.PeerCertificates[i].Raw
+		sha := crypto.Hash(crypto.SHA1).New()
+		sha.Write(certRaw)
+		myFP := hex.EncodeToString(sha.Sum(nil))
+		myFP = fingerPrintStr(myFP).String()
+
+		log.Println(myFP)
+		log.Println("---")
 	}
 	certRaw := state.PeerCertificates[0].Raw
 

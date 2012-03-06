@@ -28,7 +28,7 @@ func main() {
 		log.Fatalln("trouble parsing cert: ", err)
 	}
 
-	certBytes, err = ioutil.ReadFile("vtcybersecurity.pem")
+	/*certBytes, err = ioutil.ReadFile("vtcybersecurity.pem")
 	if err != nil {
 		log.Fatalln("error reading certfile: ", err)
 	}
@@ -41,10 +41,10 @@ func main() {
 	vtc, err := x509.ParseCertificates(certBytes)
 	if err != nil {
 		log.Fatalln("trouble parsing cert: ", err)
-	}
+	}*/
 
 	c.AddNotary("127.0.0.1:443", cert[0])
-	c.AddNotary("notary.sigbus.net:81", vtc[0])
+	//c.AddNotary("notary.sigbus.net:81", vtc[0])
 
 	c.Threshold = 1
 
